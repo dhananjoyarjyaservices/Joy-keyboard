@@ -27,7 +27,9 @@ class JoyKeyboardService : InputMethodService() {
     private var suggestionArea: LinearLayout? = null
 
     private val handler = Handler(Looper.getMainLooper())
+
     private var deleteRunnable: Runnable? = null
+    private var quickReplyRunnable: Runnable? = null
 
     private val prefs by lazy {
         getSharedPreferences("joy_keyboard_settings", MODE_PRIVATE)
@@ -48,6 +50,8 @@ class JoyKeyboardService : InputMethodService() {
         val layout = root ?: return
 
         stopDeleting()
+        cancelQuickReplyRefresh()
+
         layout.removeAllViews()
         suggestionArea = null
 
@@ -105,9 +109,23 @@ class JoyKeyboardService : InputMethodService() {
         )
 
         if (!symbols) {
-            addRow(layout, listOf("1","2","3","4","5","6","7","8","9","0"), keyHeight)
-            addRow(layout, listOf("q","w","e","r","t","y","u","i","o","p"), keyHeight)
-            addRow(layout, listOf("a","s","d","f","g","h","j","k","l"), keyHeight)
+            addRow(
+                layout,
+                listOf("1","2","3","4","5","6","7","8","9","0"),
+                keyHeight
+            )
+
+            addRow(
+                layout,
+                listOf("q","w","e","r","t","y","u","i","o","p"),
+                keyHeight
+            )
+
+            addRow(
+                layout,
+                listOf("a","s","d","f","g","h","j","k","l"),
+                keyHeight
+            )
 
             val row = LinearLayout(this)
 
@@ -118,6 +136,7 @@ class JoyKeyboardService : InputMethodService() {
 
             listOf("z","x","c","v","b","n","m").forEach { letter ->
                 val output = if (caps) letter.uppercase() else letter
+
                 addKey(row, output, 1f, keyHeight) {
                     commit(output)
                 }
@@ -127,15 +146,39 @@ class JoyKeyboardService : InputMethodService() {
             layout.addView(row)
 
         } else {
-            addRow(layout, listOf("@","#","₹","$","%","&","-","_","(",")"), keyHeight)
-            addRow(layout, listOf("+","=","/","*","\"","'",":",";","!","?"), keyHeight)
-            addRow(layout, listOf("¥","×","•","<",">","[","]","{","}","\\"), keyHeight)
-            addRow(layout, listOf("~","`","^","°","©","®","™","€","£","|"), keyHeight)
+            addRow(
+                layout,
+                listOf("@","#","₹","$","%","&","-","_","(",")"),
+                keyHeight
+            )
+
+            addRow(
+                layout,
+                listOf("+","=","/","*","\"","'",":",";","!","?"),
+                keyHeight
+            )
+
+            addRow(
+                layout,
+                listOf("¥","×","•","<",">","[","]","{","}","\\"),
+                keyHeight
+            )
+
+            addRow(
+                layout,
+                listOf("~","`","^","°","©","®","™","€","£","|"),
+                keyHeight
+            )
         }
 
         val bottom = LinearLayout(this)
 
-        addKey(bottom, if (symbols) "ABC" else "?123", 1.4f, keyHeight) {
+        addKey(
+            bottom,
+            if (symbols) "ABC" else "?123",
+            1.4f,
+            keyHeight
+        ) {
             symbols = !symbols
             renderKeyboard()
         }
@@ -148,19 +191,45 @@ class JoyKeyboardService : InputMethodService() {
         addBackspaceKey(bottom, 1.1f, keyHeight)
 
         addKey(bottom, "↵", 1.1f, keyHeight) {
-            currentInputConnection?.commitText("\n", 1)
+            try {
+                currentInputConnection?.commitText("\n", 1)
+            } catch (_: Exception) {
+            }
             clearQuickReplyArea()
         }
 
         layout.addView(bottom)
     }
 
+    // Direct typing: insert text first, refresh Quick Replies later.
     private fun commit(value: String) {
         try {
-            currentInputConnection?.commitText(value, 1)
-            refreshQuickReplies()
+            val connection = currentInputConnection ?: return
+            connection.commitText(value, 1)
+            scheduleQuickReplyRefresh()
         } catch (_: Exception) {
         }
+    }
+
+    // Debounced Quick Reply refresh.
+    private fun scheduleQuickReplyRefresh() {
+        cancelQuickReplyRefresh()
+
+        val task = Runnable {
+            if (root != null && !clipboardOpen) {
+                refreshQuickReplies()
+            }
+        }
+
+        quickReplyRunnable = task
+        handler.postDelayed(task, 300)
+    }
+
+    private fun cancelQuickReplyRefresh() {
+        quickReplyRunnable?.let {
+            handler.removeCallbacks(it)
+        }
+        quickReplyRunnable = null
     }
 
     private fun captureCurrentClipboard() {
@@ -196,7 +265,10 @@ class JoyKeyboardService : InputMethodService() {
             setPadding(dp(8), dp(8), dp(8), dp(8))
         }
 
-        header.addView(title, LinearLayout.LayoutParams(0, dp(42), 1f))
+        header.addView(
+            title,
+            LinearLayout.LayoutParams(0, dp(42), 1f)
+        )
 
         addTool(header, "Clear") {
             ClipboardStore(this).clear()
@@ -219,6 +291,7 @@ class JoyKeyboardService : InputMethodService() {
                 gravity = Gravity.CENTER
                 setTextColor(Color.DKGRAY)
             }
+
             layout.addView(empty)
             return
         }
@@ -237,9 +310,12 @@ class JoyKeyboardService : InputMethodService() {
                 background = roundedBackground(Color.WHITE)
 
                 setOnClickListener {
-                    currentInputConnection?.commitText(item, 1)
-                    clipboardOpen = false
-                    renderKeyboard()
+                    try {
+                        currentInputConnection?.commitText(item, 1)
+                        clipboardOpen = false
+                        renderKeyboard()
+                    } catch (_: Exception) {
+                    }
                 }
 
                 setOnLongClickListener {
@@ -253,6 +329,7 @@ class JoyKeyboardService : InputMethodService() {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
+
             params.setMargins(dp(3), dp(3), dp(3), dp(3))
             list.addView(entry, params)
         }
@@ -270,6 +347,7 @@ class JoyKeyboardService : InputMethodService() {
         )
     }
 
+    // Quick Reply search and display.
     private fun refreshQuickReplies() {
         val area = suggestionArea ?: return
         if (clipboardOpen) return
@@ -310,8 +388,10 @@ class JoyKeyboardService : InputMethodService() {
 
                 setOnClickListener {
                     try {
-                        val textBefore = currentInputConnection
-                            ?.getTextBeforeCursor(200, 0)
+                        val connection = currentInputConnection ?: return@setOnClickListener
+
+                        val textBefore = connection
+                            .getTextBeforeCursor(200, 0)
                             ?.toString() ?: ""
 
                         val index = textBefore.lastIndexOf('\\')
@@ -319,11 +399,8 @@ class JoyKeyboardService : InputMethodService() {
                         if (index >= 0) {
                             val deleteLength = textBefore.length - index
 
-                            currentInputConnection
-                                ?.deleteSurroundingText(deleteLength, 0)
-
-                            currentInputConnection
-                                ?.commitText(reply.message, 1)
+                            connection.deleteSurroundingText(deleteLength, 0)
+                            connection.commitText(reply.message, 1)
                         }
 
                         clearQuickReplyArea()
@@ -354,6 +431,7 @@ class JoyKeyboardService : InputMethodService() {
 
         keys.forEach { value ->
             val output = if (caps && !symbols) value.uppercase() else value
+
             addKey(row, output, 1f, height) {
                 commit(output)
             }
@@ -395,7 +473,10 @@ class JoyKeyboardService : InputMethodService() {
             setTextColor(Color.rgb(30, 30, 30))
             typeface = Typeface.DEFAULT
             background = roundedBackground(Color.WHITE)
-            setOnClickListener { action() }
+
+            setOnClickListener {
+                action()
+            }
         }
 
         val params = LinearLayout.LayoutParams(0, height, weight)
@@ -403,6 +484,7 @@ class JoyKeyboardService : InputMethodService() {
         row.addView(key, params)
     }
 
+    // Backspace with controlled long press.
     private fun addBackspaceKey(
         row: LinearLayout,
         weight: Float,
@@ -452,13 +534,15 @@ class JoyKeyboardService : InputMethodService() {
     private fun deleteOneCharacter() {
         try {
             currentInputConnection?.deleteSurroundingText(1, 0)
-            refreshQuickReplies()
+            scheduleQuickReplyRefresh()
         } catch (_: Exception) {
         }
     }
 
     private fun stopDeleting() {
-        deleteRunnable?.let { handler.removeCallbacks(it) }
+        deleteRunnable?.let {
+            handler.removeCallbacks(it)
+        }
         deleteRunnable = null
     }
 
@@ -475,14 +559,18 @@ class JoyKeyboardService : InputMethodService() {
 
     override fun onFinishInput() {
         stopDeleting()
+        cancelQuickReplyRefresh()
         super.onFinishInput()
     }
 
     override fun onDestroy() {
         stopDeleting()
+        cancelQuickReplyRefresh()
         handler.removeCallbacksAndMessages(null)
+
         suggestionArea = null
         root = null
+
         super.onDestroy()
     }
 }
