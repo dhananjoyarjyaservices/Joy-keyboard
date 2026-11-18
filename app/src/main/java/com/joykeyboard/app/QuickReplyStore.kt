@@ -17,81 +17,98 @@ class QuickReplyStore(context: Context) {
         Context.MODE_PRIVATE
     )
 
-    fun getAll(): List<QuickReply> {
-        val json = prefs.getString("replies", "[]")
-            ?: "[]"
+    private val key = "replies"
 
+    fun getAll(): List<QuickReply> {
         val result = mutableListOf<QuickReply>()
 
         try {
-            val array = JSONArray(json)
+            val json = JSONArray(prefs.getString(key, "[]"))
 
-            for (i in 0 until array.length()) {
-                val item = array.getJSONObject(i)
+            for (i in 0 until json.length()) {
+                val item = json.optJSONObject(i) ?: continue
 
-                result.add(
-                    QuickReply(
-                        code = item.getString("code"),
-                        message = item.getString("message")
+                val code = item.optString("code", "")
+                val message = item.optString("message", "")
+
+                if (code.isNotBlank()) {
+                    result.add(
+                        QuickReply(
+                            code = code,
+                            message = message
+                        )
                     )
-                )
+                }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
 
         return result
     }
 
-    fun save(code: String, message: String) {
+    fun save(reply: QuickReply) {
+        val code = reply.code.trim().removePrefix("\\")
+        val message = reply.message.trim()
+
+        if (code.isBlank() || message.isBlank()) return
+
         val replies = getAll().toMutableList()
 
-        replies.removeAll {
-            it.code.equals(code.trim(), ignoreCase = true)
+        // Update existing shortcut or add new one
+        val index = replies.indexOfFirst {
+            it.code.equals(code, ignoreCase = true)
         }
 
-        replies.add(
-            QuickReply(
-                code.trim(),
-                message
-            )
-        )
+        val newReply = QuickReply(code, message)
 
-        val array = JSONArray()
-
-        replies.forEach {
-            val item = JSONObject()
-            item.put("code", it.code)
-            item.put("message", it.message)
-            array.put(item)
+        if (index >= 0) {
+            replies[index] = newReply
+        } else {
+            replies.add(newReply)
         }
 
-        prefs.edit()
-            .putString("replies", array.toString())
-            .apply()
+        saveList(replies)
     }
 
     fun delete(code: String) {
         val replies = getAll().filterNot {
-            it.code.equals(code, ignoreCase = true)
+            it.code.equals(
+                code.trim().removePrefix("\\"),
+                ignoreCase = true
+            )
         }
 
-        val array = JSONArray()
-
-        replies.forEach {
-            val item = JSONObject()
-            item.put("code", it.code)
-            item.put("message", it.message)
-            array.put(item)
-        }
-
-        prefs.edit()
-            .putString("replies", array.toString())
-            .apply()
+        saveList(replies)
     }
 
     fun search(query: String): List<QuickReply> {
-        return getAll().filter {
-            it.code.contains(query, ignoreCase = true)
+        val searchText = query.trim().removePrefix("\\")
+
+        if (searchText.isBlank()) {
+            return getAll()
         }
+
+        return getAll().filter {
+            it.code.contains(searchText, ignoreCase = true) ||
+            it.message.contains(searchText, ignoreCase = true)
+        }
+    }
+
+    private fun saveList(replies: List<QuickReply>) {
+        val json = JSONArray()
+
+        replies.forEach { reply ->
+            val item = JSONObject().apply {
+                put("code", reply.code)
+                put("message", reply.message)
+            }
+
+            json.put(item)
+        }
+
+        prefs.edit()
+            .putString(key, json.toString())
+            .apply()
     }
 }
