@@ -24,7 +24,7 @@ class JoyKeyboardService : InputMethodService() {
     override fun onCreateInputView(): View {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(4, 5, 4, 5)
+            setPadding(dp(4), dp(5), dp(4), dp(5))
             setBackgroundColor(Color.rgb(231, 246, 238))
         }
         renderKeyboard()
@@ -36,64 +36,124 @@ class JoyKeyboardService : InputMethodService() {
         layout.removeAllViews()
 
         val size = prefs.getInt("keyboard_size", 50).coerceIn(0, 100)
-        val height = dp(40 + size * 30 / 100)
+        val keyHeight = dp(40 + size * 30 / 100)
 
         val toolbar = LinearLayout(this).apply {
             gravity = Gravity.CENTER
+            orientation = LinearLayout.HORIZONTAL
         }
 
         addTool(toolbar, "▦") {}
         addTool(toolbar, "💬") {
-            startActivity(Intent(this, QuickReplyActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            startActivity(
+                Intent(this, QuickReplyActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
         }
         addTool(toolbar, "⚙") {
-            startActivity(Intent(this, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            startActivity(
+                Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
         }
 
         layout.addView(toolbar)
 
-        addRow(layout, listOf("1","2","3","4","5","6","7","8","9","0"), height)
-
         if (!symbols) {
-            addRow(layout, listOf("q","w","e","r","t","y","u","i","o","p"), height)
-            addRow(layout, listOf("a","s","d","f","g","h","j","k","l"), height)
+            // Number row
+            addRow(
+                layout,
+                listOf("1","2","3","4","5","6","7","8","9","0"),
+                keyHeight
+            )
+
+            // Alphabet rows
+            addRow(
+                layout,
+                listOf("q","w","e","r","t","y","u","i","o","p"),
+                keyHeight
+            )
+
+            addRow(
+                layout,
+                listOf("a","s","d","f","g","h","j","k","l"),
+                keyHeight
+            )
 
             val row = LinearLayout(this)
-            addKey(row, "⇧", 1.3f, height) {
+
+            addKey(row, "⇧", 1.3f, keyHeight) {
                 caps = !caps
                 renderKeyboard()
             }
 
-            listOf("z","x","c","v","b","n","m").forEach {
-                addKey(row, if (caps) it.uppercase() else it, 1f, height) {
-                    commit(if (caps) it.uppercase() else it)
+            listOf("z","x","c","v","b","n","m").forEach { letter ->
+                val output = if (caps) letter.uppercase() else letter
+                addKey(row, output, 1f, keyHeight) {
+                    commit(output)
                 }
             }
 
-            addKey(row, "⌫", 1.3f, height) {
+            addKey(row, "⌫", 1.3f, keyHeight) {
                 currentInputConnection?.deleteSurroundingText(1, 0)
             }
+
             layout.addView(row)
 
         } else {
-            addRow(layout, listOf("@","#","₹","_","&","-","+","(",")","/"), height)
-            addRow(layout, listOf("=","*","\"","'",":",";","!","?","×"), height)
+            // Symbols page 1
+            addRow(
+                layout,
+                listOf("@","#","₹","$","%","&","-","_","(",")"),
+                keyHeight
+            )
+
+            addRow(
+                layout,
+                listOf("+","=","/","*", "\"", "'", ":", ";","!","?"),
+                keyHeight
+            )
+
+            addRow(
+                layout,
+                listOf("¥","×","•","<",">","[","]","{","}","\\"),
+                keyHeight
+            )
+
+            addRow(
+                layout,
+                listOf("~","`","^","°","©","®","™","€","£","|"),
+                keyHeight
+            )
         }
 
+        // Bottom row
         val bottom = LinearLayout(this)
 
-        addKey(bottom, if (symbols) "ABC" else "?123", 1.4f, height) {
+        addKey(bottom, if (symbols) "ABC" else "?123", 1.4f, keyHeight) {
             symbols = !symbols
             renderKeyboard()
         }
 
-        addKey(bottom, ",", 0.7f, height) { commit(",") }
-        addKey(bottom, "☺", 0.8f, height) {}
-        addKey(bottom, "SPACE", 3.5f, height) { commit(" ") }
-        addKey(bottom, ".", 0.7f, height) { commit(".") }
-        addKey(bottom, "↵", 1.3f, height) {
+        addKey(bottom, ",", 0.7f, keyHeight) {
+            commit(",")
+        }
+
+        addKey(bottom, "☺", 0.8f, keyHeight) {}
+
+        addKey(bottom, "SPACE", 3.5f, keyHeight) {
+            commit(" ")
+        }
+
+        addKey(bottom, ".", 0.7f, keyHeight) {
+            commit(".")
+        }
+
+        addKey(bottom, "⌫", 1.1f, keyHeight) {
+            currentInputConnection?.deleteSurroundingText(1, 0)
+        }
+
+        addKey(bottom, "↵", 1.1f, keyHeight) {
             currentInputConnection?.commitText("\n", 1)
         }
 
@@ -105,21 +165,36 @@ class JoyKeyboardService : InputMethodService() {
         keys: List<String>,
         height: Int
     ) {
-        val row = LinearLayout(this)
-        keys.forEach {
-            addKey(row, it, 1f, height) { commit(it) }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
         }
+
+        keys.forEach { value ->
+            addKey(row, value, 1f, height) {
+                commit(value)
+            }
+        }
+
         layout.addView(row)
     }
 
-    private fun addTool(row: LinearLayout, label: String, action: () -> Unit) {
-        val button = TextView(this)
-        button.text = label
-        button.textSize = 22f
-        button.gravity = Gravity.CENTER
-        button.setTextColor(Color.BLACK)
-        button.setOnClickListener { action() }
-        row.addView(button, LinearLayout.LayoutParams(0, dp(42), 1f))
+    private fun addTool(
+        row: LinearLayout,
+        label: String,
+        action: () -> Unit
+    ) {
+        val button = TextView(this).apply {
+            text = label
+            textSize = 22f
+            gravity = Gravity.CENTER
+            setTextColor(Color.BLACK)
+            setOnClickListener { action() }
+        }
+
+        row.addView(
+            button,
+            LinearLayout.LayoutParams(0, dp(42), 1f)
+        )
     }
 
     private fun addKey(
@@ -129,17 +204,18 @@ class JoyKeyboardService : InputMethodService() {
         height: Int,
         action: () -> Unit
     ) {
-        val key = TextView(this)
-        key.text = label
-        key.textSize = if (label == "SPACE") 14f else 18f
-        key.gravity = Gravity.CENTER
-        key.setTextColor(Color.rgb(30, 30, 30))
-        key.typeface = Typeface.DEFAULT
-        key.background = GradientDrawable().apply {
-            setColor(Color.WHITE)
-            cornerRadius = dp(9).toFloat()
+        val key = TextView(this).apply {
+            text = label
+            textSize = if (label == "SPACE") 14f else 18f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(30, 30, 30))
+            typeface = Typeface.DEFAULT
+            background = GradientDrawable().apply {
+                setColor(Color.WHITE)
+                cornerRadius = dp(9).toFloat()
+            }
+            setOnClickListener { action() }
         }
-        key.setOnClickListener { action() }
 
         val params = LinearLayout.LayoutParams(0, height, weight)
         params.setMargins(dp(2), dp(3), dp(2), dp(3))
@@ -150,6 +226,7 @@ class JoyKeyboardService : InputMethodService() {
         currentInputConnection?.commitText(value, 1)
     }
 
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
+    }
 }
