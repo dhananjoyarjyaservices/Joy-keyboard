@@ -4,9 +4,9 @@ package com.joykeyboard.app
 import android.app.Activity
 import android.os.Bundle
 import android.content.Intent
+import android.content.Context
 import android.view.Gravity
 import android.view.inputmethod.InputMethodManager
-import android.content.Context
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -23,7 +23,7 @@ class MainActivity : Activity() {
 
         val title = TextView(this)
         title.text = "JOY KEYBOARD"
-        title.textSize = 28f
+        title.textSize = 30f
         title.gravity = Gravity.CENTER
 
         root.addView(title)
@@ -59,10 +59,20 @@ class MainActivity : Activity() {
 
         root.addView(select)
 
+        val quickReply = Button(this)
+        quickReply.text = "WhatsApp Quick Reply"
+
+        quickReply.setOnClickListener {
+            startActivity(
+                Intent(this, QuickReplyActivity::class.java)
+            )
+        }
+
+        root.addView(quickReply)
+
         val info = TextView(this)
-        info.text = "\nClipboard and Quick Reply features are coming."
+        info.text = "\nClipboard and more features coming soon."
         info.gravity = Gravity.CENTER
-        info.textSize = 14f
 
         root.addView(info)
 
