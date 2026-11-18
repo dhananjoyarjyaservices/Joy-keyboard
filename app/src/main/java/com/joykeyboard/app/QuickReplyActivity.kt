@@ -34,7 +34,7 @@ class QuickReplyActivity : Activity() {
 
         codeInput = EditText(this).apply {
             hint = "Enter code (example: mstock)"
-            singleLine = true
+            isSingleLine = true
         }
         root.addView(codeInput)
 
