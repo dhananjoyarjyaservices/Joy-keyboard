@@ -1,170 +1,155 @@
 
 package com.joykeyboard.app
 
-import android.inputmethodservice.InputMethodService
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.inputmethodservice.InputMethodService
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
-import android.view.inputmethod.InputConnection
-import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 
 class JoyKeyboardService : InputMethodService() {
 
     private var caps = false
+    private var symbols = false
+    private var root: LinearLayout? = null
 
-    private val green = Color.rgb(22, 163, 74)
-    private val keyColor = Color.rgb(255, 255, 255)
+    private val prefs by lazy {
+        getSharedPreferences("joy_keyboard_settings", MODE_PRIVATE)
+    }
 
     override fun onCreateInputView(): View {
-        val root = LinearLayout(this)
-        root.orientation = LinearLayout.VERTICAL
-        root.setPadding(4, 8, 4, 8)
-        root.setBackgroundColor(Color.rgb(231, 246, 238))
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(4, 5, 4, 5)
+            setBackgroundColor(Color.rgb(231, 246, 238))
+        }
+        renderKeyboard()
+        return root!!
+    }
 
-        val toolbar = LinearLayout(this)
-        toolbar.gravity = Gravity.CENTER
-        toolbar.orientation = LinearLayout.HORIZONTAL
+    private fun renderKeyboard() {
+        val layout = root ?: return
+        layout.removeAllViews()
 
-        toolbar.addView(toolButton("▦") {
-            // Clipboard feature will be added next
-        })
+        val size = prefs.getInt("keyboard_size", 50).coerceIn(0, 100)
+        val height = dp(40 + size * 30 / 100)
 
-        toolbar.addView(toolButton("💬") {
-            // Quick Reply feature will be added next
-        })
-
-        toolbar.addView(toolButton("⚙") {
-            // Settings feature will be added next
-        })
-
-        root.addView(toolbar)
-
-        addKeyRow(root, listOf("Q","W","E","R","T","Y","U","I","O","P"))
-        addKeyRow(root, listOf("A","S","D","F","G","H","J","K","L"))
-        
-        val third = LinearLayout(this)
-        third.orientation = LinearLayout.HORIZONTAL
-        third.gravity = Gravity.CENTER
-
-        third.addView(keyButton("⇧", 1f) {
-            caps = !caps
-        })
-
-        listOf("Z","X","C","V","B","N","M").forEach {
-            third.addView(keyButton(it, 1f) {
-                commit(it)
-            })
+        val toolbar = LinearLayout(this).apply {
+            gravity = Gravity.CENTER
         }
 
-        third.addView(keyButton("⌫", 1.2f) {
-            currentInputConnection?.deleteSurroundingText(1, 0)
-        })
+        addTool(toolbar, "▦") {}
+        addTool(toolbar, "💬") {
+            startActivity(Intent(this, QuickReplyActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        addTool(toolbar, "⚙") {
+            startActivity(Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
 
-        root.addView(third)
+        layout.addView(toolbar)
+
+        addRow(layout, listOf("1","2","3","4","5","6","7","8","9","0"), height)
+
+        if (!symbols) {
+            addRow(layout, listOf("q","w","e","r","t","y","u","i","o","p"), height)
+            addRow(layout, listOf("a","s","d","f","g","h","j","k","l"), height)
+
+            val row = LinearLayout(this)
+            addKey(row, "⇧", 1.3f, height) {
+                caps = !caps
+                renderKeyboard()
+            }
+
+            listOf("z","x","c","v","b","n","m").forEach {
+                addKey(row, if (caps) it.uppercase() else it, 1f, height) {
+                    commit(if (caps) it.uppercase() else it)
+                }
+            }
+
+            addKey(row, "⌫", 1.3f, height) {
+                currentInputConnection?.deleteSurroundingText(1, 0)
+            }
+            layout.addView(row)
+
+        } else {
+            addRow(layout, listOf("@","#","₹","_","&","-","+","(",")","/"), height)
+            addRow(layout, listOf("=","*","\"","'",":",";","!","?","×"), height)
+        }
 
         val bottom = LinearLayout(this)
-        bottom.orientation = LinearLayout.HORIZONTAL
 
-        bottom.addView(keyButton("?123", 1.3f) {})
-        bottom.addView(keyButton(",", 0.7f) {
-            commit(",")
-        })
-        bottom.addView(keyButton("☺", 0.9f) {})
-        bottom.addView(keyButton("SPACE", 4f) {
-            commit(" ")
-        })
-        bottom.addView(keyButton(".", 0.7f) {
-            commit(".")
-        })
-        bottom.addView(keyButton("↵", 1.3f) {
+        addKey(bottom, if (symbols) "ABC" else "?123", 1.4f, height) {
+            symbols = !symbols
+            renderKeyboard()
+        }
+
+        addKey(bottom, ",", 0.7f, height) { commit(",") }
+        addKey(bottom, "☺", 0.8f, height) {}
+        addKey(bottom, "SPACE", 3.5f, height) { commit(" ") }
+        addKey(bottom, ".", 0.7f, height) { commit(".") }
+        addKey(bottom, "↵", 1.3f, height) {
             currentInputConnection?.commitText("\n", 1)
-        })
+        }
 
-        root.addView(bottom)
-
-        return root
+        layout.addView(bottom)
     }
 
-    private fun addKeyRow(
-        root: LinearLayout,
-        keys: List<String>
+    private fun addRow(
+        layout: LinearLayout,
+        keys: List<String>,
+        height: Int
     ) {
         val row = LinearLayout(this)
-        row.gravity = Gravity.CENTER
-        row.orientation = LinearLayout.HORIZONTAL
-
-        keys.forEach { key ->
-            row.addView(keyButton(key, 1f) {
-                commit(key)
-            })
+        keys.forEach {
+            addKey(row, it, 1f, height) { commit(it) }
         }
-
-        root.addView(row)
+        layout.addView(row)
     }
 
-    private fun commit(value: String) {
-        val text = if (value.length == 1 && value[0].isLetter()) {
-            if (caps) value.uppercase() else value.lowercase()
-        } else {
-            value
-        }
-
-        currentInputConnection?.commitText(text, 1)
-    }
-
-    private fun toolButton(
-        label: String,
-        action: () -> Unit
-    ): TextView {
+    private fun addTool(row: LinearLayout, label: String, action: () -> Unit) {
         val button = TextView(this)
         button.text = label
-        button.textSize = 23f
+        button.textSize = 22f
         button.gravity = Gravity.CENTER
         button.setTextColor(Color.BLACK)
         button.setOnClickListener { action() }
-
-        button.layoutParams = LinearLayout.LayoutParams(
-            0,
-            52,
-            1f
-        )
-
-        return button
+        row.addView(button, LinearLayout.LayoutParams(0, dp(42), 1f))
     }
 
-    private fun keyButton(
+    private fun addKey(
+        row: LinearLayout,
         label: String,
         weight: Float,
+        height: Int,
         action: () -> Unit
-    ): Button {
-        val button = Button(this)
-        button.text = label
-        button.textSize = 17f
-        button.setTextColor(Color.rgb(30, 30, 30))
-        button.typeface = Typeface.DEFAULT
-        button.isAllCaps = false
-        button.background = GradientDrawable().apply {
-            setColor(keyColor)
-            cornerRadius = 12f
+    ) {
+        val key = TextView(this)
+        key.text = label
+        key.textSize = if (label == "SPACE") 14f else 18f
+        key.gravity = Gravity.CENTER
+        key.setTextColor(Color.rgb(30, 30, 30))
+        key.typeface = Typeface.DEFAULT
+        key.background = GradientDrawable().apply {
+            setColor(Color.WHITE)
+            cornerRadius = dp(9).toFloat()
         }
+        key.setOnClickListener { action() }
 
-        button.setPadding(0, 0, 0, 0)
-        button.setOnClickListener { action() }
-
-        val params = LinearLayout.LayoutParams(
-            0,
-            52,
-            weight
-        )
-
-        params.setMargins(2, 4, 2, 4)
-        button.layoutParams = params
-
-        return button
+        val params = LinearLayout.LayoutParams(0, height, weight)
+        params.setMargins(dp(2), dp(3), dp(2), dp(3))
+        row.addView(key, params)
     }
+
+    private fun commit(value: String) {
+        currentInputConnection?.commitText(value, 1)
+    }
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
 }
