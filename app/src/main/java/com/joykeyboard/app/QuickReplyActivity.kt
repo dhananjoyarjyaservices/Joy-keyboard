@@ -19,35 +19,42 @@ class QuickReplyActivity : Activity() {
 
         store = QuickReplyStore(this)
 
-        val root = LinearLayout(this)
-        root.orientation = LinearLayout.VERTICAL
-        root.setPadding(20, 24, 20, 20)
-        root.setBackgroundColor(Color.rgb(245, 250, 247))
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(20, 24, 20, 20)
+            setBackgroundColor(Color.rgb(245, 250, 247))
+        }
 
-        val title = TextView(this)
-        title.text = "WhatsApp Quick Reply"
-        title.textSize = 24f
-        title.setTextColor(Color.rgb(22, 120, 65))
+        val title = TextView(this).apply {
+            text = "WhatsApp Quick Reply"
+            textSize = 24f
+            setTextColor(Color.rgb(22, 120, 65))
+        }
         root.addView(title)
 
-        codeInput = EditText(this)
-        codeInput.hint = "Enter code (example: mstock)"
+        codeInput = EditText(this).apply {
+            hint = "Enter code (example: mstock)"
+            singleLine = true
+        }
         root.addView(codeInput)
 
-        messageInput = EditText(this)
-        messageInput.hint = "Type your message or link"
-        messageInput.minLines = 3
-        messageInput.gravity = Gravity.TOP
+        messageInput = EditText(this).apply {
+            hint = "Type your message or link"
+            minLines = 3
+            gravity = Gravity.TOP
+        }
         root.addView(messageInput)
 
-        val save = Button(this)
-        save.text = "Save Quick Reply"
-
+        val save = Button(this).apply {
+            text = "Save Quick Reply"
+        }
         root.addView(save)
 
         save.setOnClickListener {
             val code = codeInput.text.toString().trim()
-            val message = messageInput.text.toString()
+                .removePrefix("\\")
+
+            val message = messageInput.text.toString().trim()
 
             if (code.isBlank() || message.isBlank()) {
                 Toast.makeText(
@@ -56,9 +63,17 @@ class QuickReplyActivity : Activity() {
                     Toast.LENGTH_SHORT
                 ).show()
             } else {
-                store.save(code, message)
+                // Correct save function call
+                store.save(
+                    QuickReply(
+                        code = code,
+                        message = message
+                    )
+                )
+
                 codeInput.text.clear()
                 messageInput.text.clear()
+
                 refreshList()
 
                 Toast.makeText(
@@ -69,15 +84,19 @@ class QuickReplyActivity : Activity() {
             }
         }
 
-        val heading = TextView(this)
-        heading.text = "My Saved Replies"
-        heading.textSize = 20f
-        heading.setTextColor(Color.BLACK)
+        val heading = TextView(this).apply {
+            text = "My Saved Replies"
+            textSize = 20f
+            setTextColor(Color.BLACK)
+            setPadding(0, 16, 0, 8)
+        }
         root.addView(heading)
 
         val scroll = ScrollView(this)
-        list = LinearLayout(this)
-        list.orientation = LinearLayout.VERTICAL
+
+        list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
 
         scroll.addView(list)
 
@@ -89,6 +108,7 @@ class QuickReplyActivity : Activity() {
         )
 
         setContentView(root)
+
         refreshList()
     }
 
@@ -97,33 +117,51 @@ class QuickReplyActivity : Activity() {
 
         store.getAll().forEach { reply ->
 
-            val item = LinearLayout(this)
-            item.orientation = LinearLayout.VERTICAL
-            item.setPadding(12, 12, 12, 12)
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(12, 12, 12, 12)
+                setBackgroundColor(Color.WHITE)
+            }
 
-            val code = TextView(this)
-            code.text = reply.code
-            code.textSize = 18f
-            code.setTextColor(Color.rgb(20, 130, 65))
+            val code = TextView(this).apply {
+                text = "\\" + reply.code
+                textSize = 18f
+                setTextColor(Color.rgb(20, 130, 65))
+            }
 
-            val message = TextView(this)
-            message.text = reply.message
-            message.textSize = 14f
-            message.setTextColor(Color.DKGRAY)
+            val message = TextView(this).apply {
+                text = reply.message
+                textSize = 14f
+                setTextColor(Color.DKGRAY)
+            }
 
-            val delete = Button(this)
-            delete.text = "Delete"
+            val delete = Button(this).apply {
+                text = "Delete"
+            }
 
             delete.setOnClickListener {
                 store.delete(reply.code)
                 refreshList()
+
+                Toast.makeText(
+                    this@QuickReplyActivity,
+                    "Quick Reply Deleted",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
 
             item.addView(code)
             item.addView(message)
             item.addView(delete)
 
-            list.addView(item)
+            val params = LinearLayout.LayoutParams(
+                -1,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+
+            params.setMargins(0, 6, 0, 6)
+
+            list.addView(item, params)
         }
     }
 }
