@@ -19,7 +19,6 @@ import android.view.textservice.SuggestionsInfo
 import android.view.textservice.TextInfo
 import android.view.textservice.TextServicesManager
 import android.widget.LinearLayout
-import android.widget.PopupWindow
 import android.widget.ScrollView
 import android.widget.TextView
 import java.util.Locale
@@ -30,15 +29,15 @@ class JoyKeyboardService : InputMethodService(),
     private var caps = false
     private var symbols = false
     private var clipboardOpen = false
+
     private var root: LinearLayout? = null
+    private var suggestionArea: LinearLayout? = null
 
     private var suggestions = listOf<String>()
     private var spellCheckerSession: SpellCheckerSession? = null
 
     private val handler = Handler(Looper.getMainLooper())
-
     private var deleteRunnable: Runnable? = null
-    private var keyPopup: PopupWindow? = null
 
     private val prefs by lazy {
         getSharedPreferences("joy_keyboard_settings", MODE_PRIVATE)
@@ -76,7 +75,9 @@ class JoyKeyboardService : InputMethodService(),
 
     private fun renderKeyboard() {
         val layout = root ?: return
+
         layout.removeAllViews()
+        suggestionArea = null
 
         val size = prefs.getInt(
             "keyboard_size",
@@ -128,102 +129,21 @@ class JoyKeyboardService : InputMethodService(),
             return
         }
 
-        // Quick Reply results
-        val quickReplies = getQuickReplyResults()
-
-        if (quickReplies.isNotEmpty()) {
-            val replyRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-            }
-
-            quickReplies.take(3).forEach { reply ->
-                val item = TextView(this).apply {
-                    text = reply.code
-                    textSize = 15f
-                    gravity = Gravity.CENTER
-                    setTextColor(Color.BLACK)
-                    setPadding(dp(10), dp(6), dp(10), dp(6))
-                    background = roundedBackground(Color.WHITE)
-
-                    setOnClickListener {
-                        val before = currentInputConnection
-                            ?.getTextBeforeCursor(200, 0)
-                            ?.toString() ?: ""
-
-                        val slashIndex = before.lastIndexOf('\\')
-
-                        if (slashIndex >= 0) {
-                            val deleteLength = before.length - slashIndex
-
-                            currentInputConnection
-                                ?.deleteSurroundingText(deleteLength, 0)
-
-                            currentInputConnection
-                                ?.commitText(reply.message, 1)
-                        }
-
-                        suggestions = emptyList()
-                        renderKeyboard()
-                    }
-                }
-
-                val params = LinearLayout.LayoutParams(
-                    0,
-                    dp(38),
-                    1f
-                )
-
-                params.setMargins(dp(2), dp(2), dp(2), dp(2))
-                replyRow.addView(item, params)
-            }
-
-            layout.addView(replyRow)
+        // Dedicated suggestion area
+        suggestionArea = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
 
-        // Word suggestions
-        if (suggestions.isNotEmpty() && quickReplies.isEmpty()) {
-            val suggestionRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-            }
+        layout.addView(
+            suggestionArea,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(40)
+            )
+        )
 
-            suggestions.take(3).forEach { word ->
-                val item = TextView(this).apply {
-                    text = word
-                    textSize = 15f
-                    gravity = Gravity.CENTER
-                    setTextColor(Color.BLACK)
-                    setPadding(dp(5), dp(5), dp(5), dp(5))
-
-                    setOnClickListener {
-                        val before = currentInputConnection
-                            ?.getTextBeforeCursor(100, 0)
-                            ?.toString() ?: ""
-
-                        val currentWord = before.takeLastWhile {
-                            !it.isWhitespace()
-                        }
-
-                        if (currentWord.isNotEmpty()) {
-                            currentInputConnection
-                                ?.deleteSurroundingText(currentWord.length, 0)
-
-                            currentInputConnection
-                                ?.commitText("$word ", 1)
-                        }
-
-                        suggestions = emptyList()
-                        renderKeyboard()
-                    }
-                }
-
-                suggestionRow.addView(
-                    item,
-                    LinearLayout.LayoutParams(0, dp(35), 1f)
-                )
-            }
-
-            layout.addView(suggestionRow)
-        }
+        refreshSuggestionArea()
 
         if (!symbols) {
             addRow(
@@ -321,12 +241,14 @@ class JoyKeyboardService : InputMethodService(),
 
         addKey(bottom, "↵", 1.1f, keyHeight) {
             currentInputConnection?.commitText("\n", 1)
+            suggestions = emptyList()
+            refreshSuggestionArea()
         }
 
         layout.addView(bottom)
     }
 
-    // Capture clipboard text when user opens clipboard panel
+    // Clipboard capture
     private fun captureCurrentClipboard() {
         try {
             val clipboard = getSystemService(
@@ -347,7 +269,7 @@ class JoyKeyboardService : InputMethodService(),
         }
     }
 
-    // Clipboard history panel
+    // Clipboard panel
     private fun renderClipboardPanel(layout: LinearLayout) {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -512,28 +434,11 @@ class JoyKeyboardService : InputMethodService(),
     ) {
         val key = TextView(this).apply {
             text = label
-
             textSize = if (label == "SPACE") 14f else 21f
-
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(30, 30, 30))
             typeface = Typeface.DEFAULT
             background = roundedBackground(Color.WHITE)
-
-            setOnTouchListener { view, event ->
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        showKeyPopup(view, label)
-                    }
-
-                    MotionEvent.ACTION_UP,
-                    MotionEvent.ACTION_CANCEL -> {
-                        dismissKeyPopup()
-                    }
-                }
-
-                false
-            }
 
             setOnClickListener {
                 action()
@@ -567,7 +472,7 @@ class JoyKeyboardService : InputMethodService(),
                         val runnable = object : Runnable {
                             override fun run() {
                                 deleteOneCharacter()
-                                handler.postDelayed(this, 45)
+                                handler.postDelayed(this, 60)
                             }
                         }
 
@@ -579,7 +484,8 @@ class JoyKeyboardService : InputMethodService(),
                     MotionEvent.ACTION_UP,
                     MotionEvent.ACTION_CANCEL -> {
                         stopDeleting()
-                        renderKeyboard()
+                        updateSuggestions()
+                        refreshSuggestionArea()
                         true
                     }
 
@@ -593,52 +499,6 @@ class JoyKeyboardService : InputMethodService(),
         row.addView(key, params)
     }
 
-    private fun showKeyPopup(view: View, label: String) {
-        if (label == "SPACE" || label == "⌫") return
-
-        dismissKeyPopup()
-
-        val popupText = TextView(this).apply {
-            text = label
-            textSize = 28f
-            gravity = Gravity.CENTER
-            setTextColor(Color.BLACK)
-            background = roundedBackground(Color.WHITE)
-        }
-
-        val popup = PopupWindow(
-            popupText,
-            dp(48),
-            dp(52),
-            false
-        )
-
-        val location = IntArray(2)
-        view.getLocationOnScreen(location)
-
-        try {
-            popup.showAtLocation(
-                view,
-                Gravity.TOP or Gravity.START,
-                location[0] + view.width / 2 - dp(24),
-                location[1] - dp(55)
-            )
-
-            keyPopup = popup
-        } catch (e: Exception) {
-            keyPopup = null
-        }
-    }
-
-    private fun dismissKeyPopup() {
-        try {
-            keyPopup?.dismiss()
-        } catch (e: Exception) {
-        }
-
-        keyPopup = null
-    }
-
     private fun stopDeleting() {
         deleteRunnable?.let {
             handler.removeCallbacks(it)
@@ -650,15 +510,107 @@ class JoyKeyboardService : InputMethodService(),
     private fun deleteOneCharacter() {
         currentInputConnection?.deleteSurroundingText(1, 0)
         suggestions = emptyList()
+        refreshSuggestionArea()
     }
 
+    // Normal typing: no full keyboard redraw
     private fun commit(value: String) {
         currentInputConnection?.commitText(value, 1)
         updateSuggestions()
-        renderKeyboard()
+        refreshSuggestionArea()
     }
 
-    // Spell checker suggestions
+    // Update only suggestion row
+    private fun refreshSuggestionArea() {
+        val area = suggestionArea ?: return
+
+        if (clipboardOpen) return
+
+        area.removeAllViews()
+
+        val quickReplies = getQuickReplyResults()
+
+        if (quickReplies.isNotEmpty()) {
+            quickReplies.take(3).forEach { reply ->
+                val item = TextView(this).apply {
+                    text = reply.code
+                    textSize = 14f
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.BLACK)
+                    setPadding(dp(8), dp(5), dp(8), dp(5))
+                    background = roundedBackground(Color.WHITE)
+
+                    setOnClickListener {
+                        val before = currentInputConnection
+                            ?.getTextBeforeCursor(200, 0)
+                            ?.toString() ?: ""
+
+                        val slashIndex = before.lastIndexOf('\\')
+
+                        if (slashIndex >= 0) {
+                            val deleteLength = before.length - slashIndex
+
+                            currentInputConnection
+                                ?.deleteSurroundingText(deleteLength, 0)
+
+                            currentInputConnection
+                                ?.commitText(reply.message, 1)
+                        }
+
+                        suggestions = emptyList()
+                        updateSuggestions()
+                        refreshSuggestionArea()
+                    }
+                }
+
+                area.addView(
+                    item,
+                    LinearLayout.LayoutParams(0, dp(36), 1f)
+                )
+            }
+
+            return
+        }
+
+        suggestions.take(3).forEach { word ->
+            val item = TextView(this).apply {
+                text = word
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setTextColor(Color.BLACK)
+                setPadding(dp(5), dp(4), dp(5), dp(4))
+
+                setOnClickListener {
+                    val before = currentInputConnection
+                        ?.getTextBeforeCursor(100, 0)
+                        ?.toString() ?: ""
+
+                    val currentWord = before.takeLastWhile {
+                        !it.isWhitespace()
+                    }
+
+                    if (currentWord.isNotEmpty()) {
+                        currentInputConnection
+                            ?.deleteSurroundingText(currentWord.length, 0)
+
+                        currentInputConnection
+                            ?.commitText("$word ", 1)
+                    }
+
+                    suggestions = emptyList()
+                    updateSuggestions()
+                    refreshSuggestionArea()
+                }
+            }
+
+            area.addView(
+                item,
+                LinearLayout.LayoutParams(0, dp(36), 1f)
+            )
+        }
+    }
+
+    // Spell checker
     private fun updateSuggestions() {
         val before = currentInputConnection
             ?.getTextBeforeCursor(100, 0)
@@ -670,6 +622,7 @@ class JoyKeyboardService : InputMethodService(),
 
         if (word.length < 2 || word.startsWith("\\")) {
             suggestions = emptyList()
+            refreshSuggestionArea()
             return
         }
 
@@ -697,8 +650,10 @@ class JoyKeyboardService : InputMethodService(),
         }
 
         handler.post {
+            if (root == null || clipboardOpen) return@post
+
             suggestions = found.distinct().take(3)
-            renderKeyboard()
+            refreshSuggestionArea()
         }
     }
 
@@ -721,7 +676,8 @@ class JoyKeyboardService : InputMethodService(),
 
     override fun onDestroy() {
         stopDeleting()
-        dismissKeyPopup()
+        suggestionArea = null
+        root = null
 
         spellCheckerSession?.close()
         spellCheckerSession = null
