@@ -2,6 +2,7 @@
 package com.joykeyboard.app
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -32,6 +33,7 @@ class JoyKeyboardService : InputMethodService(),
     private var spellCheckerSession: SpellCheckerSession? = null
 
     private val handler = Handler(Looper.getMainLooper())
+
     private var deleteRunnable: Runnable? = null
     private var keyPopup: PopupWindow? = null
 
@@ -43,9 +45,9 @@ class JoyKeyboardService : InputMethodService(),
         super.onCreate()
 
         try {
-            val manager =
-                getSystemService(Context.TEXT_SERVICES_MANAGER_SERVICE)
-                    as TextServicesManager
+            val manager = getSystemService(
+                Context.TEXT_SERVICES_MANAGER_SERVICE
+            ) as TextServicesManager
 
             spellCheckerSession = manager.newSpellCheckerSession(
                 null,
@@ -53,7 +55,7 @@ class JoyKeyboardService : InputMethodService(),
                 this,
                 true
             )
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             spellCheckerSession = null
         }
     }
@@ -73,7 +75,11 @@ class JoyKeyboardService : InputMethodService(),
         val layout = root ?: return
         layout.removeAllViews()
 
-        val size = prefs.getInt("keyboard_size", 50).coerceIn(0, 100)
+        val size = prefs.getInt(
+            "keyboard_size",
+            50
+        ).coerceIn(0, 100)
+
         val keyHeight = dp(40 + size * 30 / 100)
 
         // Toolbar
@@ -86,8 +92,8 @@ class JoyKeyboardService : InputMethodService(),
 
         addTool(toolbar, "💬") {
             startActivity(
-                android.content.Intent(this, QuickReplyActivity::class.java)
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                Intent(this, QuickReplyActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }
 
@@ -98,14 +104,14 @@ class JoyKeyboardService : InputMethodService(),
 
         addTool(toolbar, "⚙") {
             startActivity(
-                android.content.Intent(this, MainActivity::class.java)
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }
 
         layout.addView(toolbar)
 
-        // Quick Reply search results
+        // Quick Reply results
         val quickReplies = getQuickReplyResults()
 
         if (quickReplies.isNotEmpty()) {
@@ -113,28 +119,36 @@ class JoyKeyboardService : InputMethodService(),
                 orientation = LinearLayout.HORIZONTAL
             }
 
-            quickReplies.forEach { reply ->
+            quickReplies.take(3).forEach { reply ->
+
                 val item = TextView(this).apply {
                     text = reply.code
-                    textSize = 14f
+                    textSize = 15f
                     gravity = Gravity.CENTER
                     setTextColor(Color.BLACK)
-                    setPadding(dp(12), dp(8), dp(12), dp(8))
+                    setPadding(
+                        dp(10), dp(6), dp(10), dp(6)
+                    )
                     background = roundedBackground(Color.WHITE)
+
                     setOnClickListener {
                         val before = currentInputConnection
-                            ?.getTextBeforeCursor(200, 0)?.toString() ?: ""
+                            ?.getTextBeforeCursor(200, 0)
+                            ?.toString() ?: ""
 
                         val slashIndex = before.lastIndexOf('\\')
 
                         if (slashIndex >= 0) {
-                            val deleteLength = before.length - slashIndex
-                            currentInputConnection?.deleteSurroundingText(
-                                deleteLength, 0
-                            )
-                            currentInputConnection?.commitText(
-                                reply.message, 1
-                            )
+                            val deleteLength =
+                                before.length - slashIndex
+
+                            currentInputConnection
+                                ?.deleteSurroundingText(
+                                    deleteLength, 0
+                                )
+
+                            currentInputConnection
+                                ?.commitText(reply.message, 1)
                         }
 
                         suggestions = emptyList()
@@ -143,9 +157,15 @@ class JoyKeyboardService : InputMethodService(),
                 }
 
                 val params = LinearLayout.LayoutParams(
-                    0, dp(38), 1f
+                    0,
+                    dp(38),
+                    1f
                 )
-                params.setMargins(dp(2), dp(2), dp(2), dp(2))
+
+                params.setMargins(
+                    dp(2), dp(2), dp(2), dp(2)
+                )
+
                 replyRow.addView(item, params)
             }
 
@@ -153,31 +173,42 @@ class JoyKeyboardService : InputMethodService(),
         }
 
         // Word suggestions
-        if (suggestions.isNotEmpty() && quickReplies.isEmpty()) {
+        if (suggestions.isNotEmpty() &&
+            quickReplies.isEmpty()
+        ) {
             val suggestionRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
             }
 
             suggestions.take(3).forEach { word ->
+
                 val item = TextView(this).apply {
                     text = word
                     textSize = 15f
                     gravity = Gravity.CENTER
                     setTextColor(Color.BLACK)
-                    setPadding(dp(5), dp(5), dp(5), dp(5))
+                    setPadding(
+                        dp(5), dp(5), dp(5), dp(5)
+                    )
 
                     setOnClickListener {
                         val before = currentInputConnection
-                            ?.getTextBeforeCursor(100, 0)?.toString() ?: ""
+                            ?.getTextBeforeCursor(100, 0)
+                            ?.toString() ?: ""
 
                         val currentWord = before
-                            .takeLastWhile { !it.isWhitespace() }
+                            .takeLastWhile {
+                                !it.isWhitespace()
+                            }
 
                         if (currentWord.isNotEmpty()) {
-                            currentInputConnection?.deleteSurroundingText(
-                                currentWord.length, 0
-                            )
-                            currentInputConnection?.commitText("$word ", 1)
+                            currentInputConnection
+                                ?.deleteSurroundingText(
+                                    currentWord.length, 0
+                                )
+
+                            currentInputConnection
+                                ?.commitText("$word ", 1)
                         }
 
                         suggestions = emptyList()
@@ -187,7 +218,9 @@ class JoyKeyboardService : InputMethodService(),
 
                 suggestionRow.addView(
                     item,
-                    LinearLayout.LayoutParams(0, dp(35), 1f)
+                    LinearLayout.LayoutParams(
+                        0, dp(35), 1f
+                    )
                 )
             }
 
@@ -195,21 +228,31 @@ class JoyKeyboardService : InputMethodService(),
         }
 
         if (!symbols) {
+
             addRow(
                 layout,
-                listOf("1","2","3","4","5","6","7","8","9","0"),
+                listOf(
+                    "1","2","3","4","5",
+                    "6","7","8","9","0"
+                ),
                 keyHeight
             )
 
             addRow(
                 layout,
-                listOf("q","w","e","r","t","y","u","i","o","p"),
+                listOf(
+                    "q","w","e","r","t",
+                    "y","u","i","o","p"
+                ),
                 keyHeight
             )
 
             addRow(
                 layout,
-                listOf("a","s","d","f","g","h","j","k","l"),
+                listOf(
+                    "a","s","d","f","g",
+                    "h","j","k","l"
+                ),
                 keyHeight
             )
 
@@ -220,41 +263,60 @@ class JoyKeyboardService : InputMethodService(),
                 renderKeyboard()
             }
 
-            listOf("z","x","c","v","b","n","m").forEach { letter ->
-                val output = if (caps) letter.uppercase() else letter
+            listOf(
+                "z","x","c","v","b","n","m"
+            ).forEach { letter ->
+
+                val output = if (caps) {
+                    letter.uppercase()
+                } else {
+                    letter
+                }
+
                 addKey(row, output, 1f, keyHeight) {
                     commit(output)
                 }
             }
 
-            addKey(row, "⌫", 1.3f, keyHeight) {
-                deleteOneCharacter()
-            }
+            addBackspaceKey(row, 1.3f, keyHeight)
 
             layout.addView(row)
 
         } else {
+
             addRow(
                 layout,
-                listOf("@","#","₹","$","%","&","-","_","(",")"),
+                listOf(
+                    "@","#","₹","$","%",
+                    "&","-","_","(",")"
+                ),
                 keyHeight
             )
 
             addRow(
                 layout,
-                listOf("+","=","/","*", "\"", "'", ":", ";","!","?"),
+                listOf(
+                    "+","=","/","*","\"",
+                    "'",":",";","!","?"
+                ),
                 keyHeight
             )
 
             addRow(
                 layout,
-                listOf("¥","×","•","<",">","[","]","{","}","\\"),
+                listOf(
+                    "¥","×","•","<",">",
+                    "[","]","{","}","\\"
+                ),
                 keyHeight
             )
 
             addRow(
                 layout,
-                listOf("~","`","^","°","©","®","™","€","£","|"),
+                listOf(
+                    "~","`","^","°","©",
+                    "®","™","€","£","|"
+                ),
                 keyHeight
             )
         }
@@ -262,7 +324,12 @@ class JoyKeyboardService : InputMethodService(),
         // Bottom row
         val bottom = LinearLayout(this)
 
-        addKey(bottom, if (symbols) "ABC" else "?123", 1.4f, keyHeight) {
+        addKey(
+            bottom,
+            if (symbols) "ABC" else "?123",
+            1.4f,
+            keyHeight
+        ) {
             symbols = !symbols
             renderKeyboard()
         }
@@ -292,18 +359,26 @@ class JoyKeyboardService : InputMethodService(),
         layout.addView(bottom)
     }
 
+    // Quick Reply search
     private fun getQuickReplyResults(): List<QuickReply> {
+
         val before = currentInputConnection
-            ?.getTextBeforeCursor(100, 0)?.toString() ?: ""
+            ?.getTextBeforeCursor(100, 0)
+            ?.toString() ?: ""
 
         val slashIndex = before.lastIndexOf('\\')
-        if (slashIndex < 0) return emptyList()
+
+        if (slashIndex < 0) {
+            return emptyList()
+        }
 
         val query = before.substring(slashIndex + 1)
 
         return try {
-            QuickReplyStore(this).search(query).take(3)
-        } catch (_: Exception) {
+            QuickReplyStore(this)
+                .search(query)
+                .take(3)
+        } catch (e: Exception) {
             emptyList()
         }
     }
@@ -318,7 +393,12 @@ class JoyKeyboardService : InputMethodService(),
         }
 
         keys.forEach { value ->
-            val output = if (caps && !symbols) value.uppercase() else value
+
+            val output = if (caps && !symbols) {
+                value.uppercase()
+            } else {
+                value
+            }
 
             addKey(row, output, 1f, height) {
                 commit(output)
@@ -338,12 +418,16 @@ class JoyKeyboardService : InputMethodService(),
             textSize = 19f
             gravity = Gravity.CENTER
             setTextColor(Color.BLACK)
-            setOnClickListener { action() }
+            setOnClickListener {
+                action()
+            }
         }
 
         row.addView(
             button,
-            LinearLayout.LayoutParams(0, dp(42), 1f)
+            LinearLayout.LayoutParams(
+                0, dp(42), 1f
+            )
         )
     }
 
@@ -356,32 +440,52 @@ class JoyKeyboardService : InputMethodService(),
     ) {
         val key = TextView(this).apply {
             text = label
-            textSize = when (label) {
-                "SPACE" -> 14f
-                else -> 21f
+
+            textSize = if (label == "SPACE") {
+                14f
+            } else {
+                21f
             }
+
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(30, 30, 30))
             typeface = Typeface.DEFAULT
             background = roundedBackground(Color.WHITE)
 
             setOnTouchListener { view, event ->
+
                 when (event.action) {
-                    MotionEvent.ACTION_DOWN -> showKeyPopup(view, label)
+
+                    MotionEvent.ACTION_DOWN -> {
+                        showKeyPopup(view, label)
+                    }
+
                     MotionEvent.ACTION_UP,
-                    MotionEvent.ACTION_CANCEL -> dismissKeyPopup()
+                    MotionEvent.ACTION_CANCEL -> {
+                        dismissKeyPopup()
+                    }
                 }
+
                 false
             }
 
-            setOnClickListener { action() }
+            setOnClickListener {
+                action()
+            }
         }
 
-        val params = LinearLayout.LayoutParams(0, height, weight)
-        params.setMargins(dp(3), dp(4), dp(3), dp(4))
+        val params = LinearLayout.LayoutParams(
+            0, height, weight
+        )
+
+        params.setMargins(
+            dp(3), dp(4), dp(3), dp(4)
+        )
+
         row.addView(key, params)
     }
 
+    // Long press backspace
     private fun addBackspaceKey(
         row: LinearLayout,
         weight: Float,
@@ -395,25 +499,41 @@ class JoyKeyboardService : InputMethodService(),
             background = roundedBackground(Color.WHITE)
 
             setOnTouchListener { _, event ->
+
                 when (event.action) {
+
                     MotionEvent.ACTION_DOWN -> {
+
+                        stopDeleting()
+
                         deleteOneCharacter()
 
                         val runnable = object : Runnable {
                             override fun run() {
                                 deleteOneCharacter()
-                                handler.postDelayed(this, 45)
+
+                                handler.postDelayed(
+                                    this, 45
+                                )
                             }
                         }
 
                         deleteRunnable = runnable
-                        handler.postDelayed(runnable, 350)
+
+                        handler.postDelayed(
+                            runnable, 350
+                        )
+
                         true
                     }
 
                     MotionEvent.ACTION_UP,
                     MotionEvent.ACTION_CANCEL -> {
+
                         stopDeleting()
+
+                        renderKeyboard()
+
                         true
                     }
 
@@ -422,13 +542,24 @@ class JoyKeyboardService : InputMethodService(),
             }
         }
 
-        val params = LinearLayout.LayoutParams(0, height, weight)
-        params.setMargins(dp(3), dp(4), dp(3), dp(4))
+        val params = LinearLayout.LayoutParams(
+            0, height, weight
+        )
+
+        params.setMargins(
+            dp(3), dp(4), dp(3), dp(4)
+        )
+
         row.addView(key, params)
     }
 
-    private fun showKeyPopup(view: View, label: String) {
-        if (label == "SPACE" || label == "⌫") return
+    private fun showKeyPopup(
+        view: View,
+        label: String
+    ) {
+        if (label == "SPACE" || label == "⌫") {
+            return
+        }
 
         dismissKeyPopup()
 
@@ -448,48 +579,69 @@ class JoyKeyboardService : InputMethodService(),
         )
 
         val location = IntArray(2)
+
         view.getLocationOnScreen(location)
 
-        popup.showAtLocation(
-            view,
-            Gravity.TOP or Gravity.START,
-            location[0] + view.width / 2 - dp(24),
-            location[1] - dp(55)
-        )
+        try {
+            popup.showAtLocation(
+                view,
+                Gravity.TOP or Gravity.START,
+                location[0] + view.width / 2 - dp(24),
+                location[1] - dp(55)
+            )
 
-        keyPopup = popup
+            keyPopup = popup
+
+        } catch (e: Exception) {
+            keyPopup = null
+        }
     }
 
     private fun dismissKeyPopup() {
         try {
             keyPopup?.dismiss()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
         }
+
         keyPopup = null
     }
 
     private fun stopDeleting() {
-        deleteRunnable?.let { handler.removeCallbacks(it) }
+        deleteRunnable?.let {
+            handler.removeCallbacks(it)
+        }
+
         deleteRunnable = null
     }
 
     private fun deleteOneCharacter() {
-        currentInputConnection?.deleteSurroundingText(1, 0)
+        currentInputConnection
+            ?.deleteSurroundingText(1, 0)
+
         suggestions = emptyList()
-        renderKeyboard()
     }
 
     private fun commit(value: String) {
-        currentInputConnection?.commitText(value, 1)
+
+        currentInputConnection?.commitText(
+            value, 1
+        )
+
         updateSuggestions()
+
         renderKeyboard()
     }
 
+    // Spell checker suggestions
     private fun updateSuggestions() {
-        val before = currentInputConnection
-            ?.getTextBeforeCursor(100, 0)?.toString() ?: ""
 
-        val word = before.takeLastWhile { !it.isWhitespace() }
+        val before = currentInputConnection
+            ?.getTextBeforeCursor(100, 0)
+            ?.toString() ?: ""
+
+        val word = before.takeLastWhile {
+            !it.isWhitespace()
+        }
 
         if (word.length < 2 || word.startsWith("\\")) {
             suggestions = emptyList()
@@ -497,21 +649,27 @@ class JoyKeyboardService : InputMethodService(),
         }
 
         try {
-            spellCheckerSession?.getSuggestions(TextInfo(word), 5)
-        } catch (_: Exception) {
+            spellCheckerSession?.getSuggestions(
+                TextInfo(word),
+                5
+            )
+        } catch (e: Exception) {
             suggestions = emptyList()
         }
     }
 
+    // Correct Android listener signature
     override fun onGetSuggestions(
-        results: Array<SuggestionsInfo>,
-        sequence: Int
+        results: Array<SuggestionsInfo>
     ) {
         val found = mutableListOf<String>()
 
         results.forEach { info ->
+
             for (i in 0 until info.suggestionsCount) {
+
                 val suggestion = info.getSuggestionAt(i)
+
                 if (!suggestion.isNullOrBlank()) {
                     found.add(suggestion)
                 }
@@ -519,19 +677,23 @@ class JoyKeyboardService : InputMethodService(),
         }
 
         handler.post {
+
             suggestions = found.distinct().take(3)
+
             renderKeyboard()
         }
     }
 
+    // Correct Android listener signature
     override fun onGetSentenceSuggestions(
-        results: Array<SentenceSuggestionsInfo>,
-        sequence: Int
+        results: Array<SentenceSuggestionsInfo>
     ) {
         // Not used
     }
 
-    private fun roundedBackground(color: Int): GradientDrawable {
+    private fun roundedBackground(
+        color: Int
+    ): GradientDrawable {
         return GradientDrawable().apply {
             setColor(color)
             cornerRadius = dp(9).toFloat()
@@ -539,14 +701,19 @@ class JoyKeyboardService : InputMethodService(),
     }
 
     private fun dp(value: Int): Int {
-        return (value * resources.displayMetrics.density).toInt()
+        return (
+            value * resources.displayMetrics.density
+        ).toInt()
     }
 
     override fun onDestroy() {
+
         stopDeleting()
         dismissKeyPopup()
+
         spellCheckerSession?.close()
         spellCheckerSession = null
+
         super.onDestroy()
     }
 }
