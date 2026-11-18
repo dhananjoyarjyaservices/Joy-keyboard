@@ -8,6 +8,21 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
 
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+        </activity>
+
+        <activity
+            android:name=".QuickReplyActivity"
+            android:exported="false"/>
+
         <service
             android:name=".JoyKeyboardService"
             android:label="Joy Keyboard"
@@ -21,9 +36,9 @@
             <meta-data
                 android:name="android.view.im"
                 android:resource="@xml/method"/>
+
         </service>
 
     </application>
 
 </manifest>
-              
