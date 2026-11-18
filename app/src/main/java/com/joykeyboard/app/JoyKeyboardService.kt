@@ -201,7 +201,7 @@ class JoyKeyboardService : InputMethodService() {
         layout.addView(bottom)
     }
 
-    // Direct typing: insert text first, refresh Quick Replies later.
+    // Direct typing
     private fun commit(value: String) {
         try {
             val connection = currentInputConnection ?: return
@@ -211,7 +211,7 @@ class JoyKeyboardService : InputMethodService() {
         }
     }
 
-    // Debounced Quick Reply refresh.
+    // Quick Reply refresh
     private fun scheduleQuickReplyRefresh() {
         cancelQuickReplyRefresh()
 
@@ -347,7 +347,7 @@ class JoyKeyboardService : InputMethodService() {
         )
     }
 
-    // Quick Reply search and display.
+    // Quick Reply search
     private fun refreshQuickReplies() {
         val area = suggestionArea ?: return
         if (clipboardOpen) return
@@ -388,7 +388,8 @@ class JoyKeyboardService : InputMethodService() {
 
                 setOnClickListener {
                     try {
-                        val connection = currentInputConnection ?: return@setOnClickListener
+                        val connection = currentInputConnection
+                            ?: return@setOnClickListener
 
                         val textBefore = connection
                             .getTextBeforeCursor(200, 0)
@@ -484,7 +485,7 @@ class JoyKeyboardService : InputMethodService() {
         row.addView(key, params)
     }
 
-    // Backspace with controlled long press.
+    // Safe single-tap Backspace
     private fun addBackspaceKey(
         row: LinearLayout,
         weight: Float,
@@ -497,32 +498,11 @@ class JoyKeyboardService : InputMethodService() {
             setTextColor(Color.BLACK)
             background = roundedBackground(Color.WHITE)
 
-            setOnTouchListener { _, event ->
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        stopDeleting()
-                        deleteOneCharacter()
+            isClickable = true
+            isFocusable = false
 
-                        val runnable = object : Runnable {
-                            override fun run() {
-                                deleteOneCharacter()
-                                handler.postDelayed(this, 70)
-                            }
-                        }
-
-                        deleteRunnable = runnable
-                        handler.postDelayed(runnable, 350)
-                        true
-                    }
-
-                    MotionEvent.ACTION_UP,
-                    MotionEvent.ACTION_CANCEL -> {
-                        stopDeleting()
-                        true
-                    }
-
-                    else -> true
-                }
+            setOnClickListener {
+                deleteOneCharacter()
             }
         }
 
