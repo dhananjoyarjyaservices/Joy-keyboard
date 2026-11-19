@@ -24,6 +24,7 @@ class JoyKeyboardService : InputMethodService() {
     private var caps = false
     private var symbols = false
     private var clipboardOpen = false
+    private var backspacePressed = false
 
     private var root: LinearLayout? = null
     private var suggestionArea: LinearLayout? = null
@@ -45,10 +46,7 @@ class JoyKeyboardService : InputMethodService() {
         if (!prefs.getBoolean("keyboard_sound", true)) return
 
         try {
-            toneGenerator.startTone(
-                ToneGenerator.TONE_PROP_BEEP,
-                45
-            )
+            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 45)
         } catch (_: Exception) {
         }
     }
@@ -127,23 +125,9 @@ class JoyKeyboardService : InputMethodService() {
         )
 
         if (!symbols) {
-            addRow(
-                layout,
-                listOf("1","2","3","4","5","6","7","8","9","0"),
-                keyHeight
-            )
-
-            addRow(
-                layout,
-                listOf("q","w","e","r","t","y","u","i","o","p"),
-                keyHeight
-            )
-
-            addRow(
-                layout,
-                listOf("a","s","d","f","g","h","j","k","l"),
-                keyHeight
-            )
+            addRow(layout, listOf("1","2","3","4","5","6","7","8","9","0"), keyHeight)
+            addRow(layout, listOf("q","w","e","r","t","y","u","i","o","p"), keyHeight)
+            addRow(layout, listOf("a","s","d","f","g","h","j","k","l"), keyHeight)
 
             val row = LinearLayout(this)
 
@@ -154,7 +138,6 @@ class JoyKeyboardService : InputMethodService() {
 
             listOf("z","x","c","v","b","n","m").forEach { letter ->
                 val output = if (caps) letter.uppercase() else letter
-
                 addKey(row, output, 1f, keyHeight) {
                     commit(output)
                 }
@@ -164,39 +147,15 @@ class JoyKeyboardService : InputMethodService() {
             layout.addView(row)
 
         } else {
-            addRow(
-                layout,
-                listOf("@","#","₹","$","%","&","-","_","(",")"),
-                keyHeight
-            )
-
-            addRow(
-                layout,
-                listOf("+","=","/","*","\"","'",":",";","!","?"),
-                keyHeight
-            )
-
-            addRow(
-                layout,
-                listOf("¥","×","•","<",">","[","]","{","}","\\"),
-                keyHeight
-            )
-
-            addRow(
-                layout,
-                listOf("~","`","^","°","©","®","™","€","£","|"),
-                keyHeight
-            )
+            addRow(layout, listOf("@","#","₹","$","%","&","-","_","(",")"), keyHeight)
+            addRow(layout, listOf("+","=","/","*","\"","'",":",";","!","?"), keyHeight)
+            addRow(layout, listOf("¥","×","•","<",">","[","]","{","}","\\"), keyHeight)
+            addRow(layout, listOf("~","`","^","°","©","®","™","€","£","|"), keyHeight)
         }
 
         val bottom = LinearLayout(this)
 
-        addKey(
-            bottom,
-            if (symbols) "ABC" else "?123",
-            1.4f,
-            keyHeight
-        ) {
+        addKey(bottom, if (symbols) "ABC" else "?123", 1.4f, keyHeight) {
             symbols = !symbols
             renderKeyboard()
         }
@@ -209,6 +168,7 @@ class JoyKeyboardService : InputMethodService() {
         addBackspaceKey(bottom, 1.1f, keyHeight)
 
         addKey(bottom, "↵", 1.1f, keyHeight) {
+            stopDeleting()
             playKeySound()
             try {
                 currentInputConnection?.commitText("\n", 1)
@@ -221,6 +181,8 @@ class JoyKeyboardService : InputMethodService() {
     }
 
     private fun commit(value: String) {
+        stopDeleting()
+
         try {
             val connection = currentInputConnection ?: return
             connection.commitText(value, 1)
@@ -282,10 +244,7 @@ class JoyKeyboardService : InputMethodService() {
             setPadding(dp(8), dp(8), dp(8), dp(8))
         }
 
-        header.addView(
-            title,
-            LinearLayout.LayoutParams(0, dp(42), 1f)
-        )
+        header.addView(title, LinearLayout.LayoutParams(0, dp(42), 1f))
 
         addTool(header, "Clear") {
             ClipboardStore(this).clear()
@@ -327,6 +286,7 @@ class JoyKeyboardService : InputMethodService() {
                 background = roundedBackground(Color.WHITE)
 
                 setOnClickListener {
+                    stopDeleting()
                     try {
                         currentInputConnection?.commitText(item, 1)
                         clipboardOpen = false
@@ -403,6 +363,7 @@ class JoyKeyboardService : InputMethodService() {
                 background = roundedBackground(Color.WHITE)
 
                 setOnClickListener {
+                    stopDeleting()
                     try {
                         val connection = currentInputConnection
                             ?: return@setOnClickListener
@@ -425,10 +386,7 @@ class JoyKeyboardService : InputMethodService() {
                 }
             }
 
-            area.addView(
-                item,
-                LinearLayout.LayoutParams(0, dp(36), 1f)
-            )
+            area.addView(item, LinearLayout.LayoutParams(0, dp(36), 1f))
         }
     }
 
@@ -469,16 +427,14 @@ class JoyKeyboardService : InputMethodService() {
             setOnClickListener { action() }
         }
 
-        row.addView(
-            button,
-            LinearLayout.LayoutParams(0, dp(42), 1f)
-        )
+        row.addView(button, LinearLayout.LayoutParams(0, dp(42), 1f))
     }
 
     private fun animateKeyPress(key: View) {
         key.setOnTouchListener { view, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    stopDeleting()
                     view.animate()
                         .translationY(-dp(5).toFloat())
                         .scaleX(0.96f)
@@ -518,6 +474,7 @@ class JoyKeyboardService : InputMethodService() {
             background = roundedBackground(Color.WHITE)
 
             setOnClickListener {
+                stopDeleting()
                 playKeySound()
                 action()
             }
@@ -549,6 +506,7 @@ class JoyKeyboardService : InputMethodService() {
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
                         stopDeleting()
+                        backspacePressed = true
                         deleteOneCharacter()
 
                         view.animate()
@@ -560,6 +518,8 @@ class JoyKeyboardService : InputMethodService() {
 
                         val repeatTask = object : Runnable {
                             override fun run() {
+                                if (!backspacePressed) return
+
                                 deleteOneCharacter()
                                 handler.postDelayed(this, 75)
                             }
@@ -573,7 +533,8 @@ class JoyKeyboardService : InputMethodService() {
 
                     MotionEvent.ACTION_UP,
                     MotionEvent.ACTION_CANCEL,
-                    MotionEvent.ACTION_OUTSIDE -> {
+                    MotionEvent.ACTION_OUTSIDE,
+                    MotionEvent.ACTION_POINTER_UP -> {
                         stopDeleting()
 
                         view.animate()
@@ -606,9 +567,12 @@ class JoyKeyboardService : InputMethodService() {
     }
 
     private fun stopDeleting() {
+        backspacePressed = false
+
         deleteRunnable?.let {
             handler.removeCallbacks(it)
         }
+
         deleteRunnable = null
     }
 
