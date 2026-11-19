@@ -460,6 +460,34 @@ class JoyKeyboardService : InputMethodService() {
         )
     }
 
+    // Key press animation: 100ms down + 100ms up
+    private fun animateKeyPress(key: View) {
+        key.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    view.animate()
+                        .translationY(-dp(5).toFloat())
+                        .scaleX(0.96f)
+                        .scaleY(0.96f)
+                        .setDuration(100)
+                        .start()
+                }
+
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> {
+                    view.animate()
+                        .translationY(0f)
+                        .scaleX(1f)
+                        .scaleY(1f)
+                        .setDuration(100)
+                        .start()
+                }
+            }
+
+            false
+        }
+    }
+
     private fun addKey(
         row: LinearLayout,
         label: String,
@@ -480,12 +508,14 @@ class JoyKeyboardService : InputMethodService() {
             }
         }
 
+        animateKeyPress(key)
+
         val params = LinearLayout.LayoutParams(0, height, weight)
         params.setMargins(dp(3), dp(4), dp(3), dp(4))
         row.addView(key, params)
     }
 
-    // Safe single-tap Backspace
+    // Long-press Backspace with continuous deletion
     private fun addBackspaceKey(
         row: LinearLayout,
         weight: Float,
@@ -501,8 +531,50 @@ class JoyKeyboardService : InputMethodService() {
             isClickable = true
             isFocusable = false
 
-            setOnClickListener {
-                deleteOneCharacter()
+            setOnTouchListener { view, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        stopDeleting()
+
+                        deleteOneCharacter()
+
+                        view.animate()
+                            .translationY(-dp(5).toFloat())
+                            .scaleX(0.96f)
+                            .scaleY(0.96f)
+                            .setDuration(100)
+                            .start()
+
+                        val repeatTask = object : Runnable {
+                            override fun run() {
+                                deleteOneCharacter()
+                                handler.postDelayed(this, 75)
+                            }
+                        }
+
+                        deleteRunnable = repeatTask
+                        handler.postDelayed(repeatTask, 400)
+
+                        true
+                    }
+
+                    MotionEvent.ACTION_UP,
+                    MotionEvent.ACTION_CANCEL,
+                    MotionEvent.ACTION_OUTSIDE -> {
+                        stopDeleting()
+
+                        view.animate()
+                            .translationY(0f)
+                            .scaleX(1f)
+                            .scaleY(1f)
+                            .setDuration(100)
+                            .start()
+
+                        true
+                    }
+
+                    else -> true
+                }
             }
         }
 
