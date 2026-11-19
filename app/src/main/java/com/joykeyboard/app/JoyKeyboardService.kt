@@ -1,4 +1,3 @@
-
 package com.joykeyboard.app
 
 import android.content.ClipboardManager
@@ -33,6 +32,7 @@ class JoyKeyboardService : InputMethodService() {
 
     private var deleteRunnable: Runnable? = null
     private var quickReplyRunnable: Runnable? = null
+    private var keyboardBounceRunnable: Runnable? = null
 
     private val prefs by lazy {
         getSharedPreferences("joy_keyboard_settings", MODE_PRIVATE)
@@ -67,9 +67,11 @@ class JoyKeyboardService : InputMethodService() {
 
         stopDeleting()
         cancelQuickReplyRefresh()
+        cancelKeyboardBounce()
 
         layout.removeAllViews()
         suggestionArea = null
+        layout.translationY = 0f
 
         val size = prefs.getInt("keyboard_size", 50).coerceIn(0, 100)
         val keyHeight = dp(40 + size * 30 / 100)
@@ -170,14 +172,54 @@ class JoyKeyboardService : InputMethodService() {
         addKey(bottom, "↵", 1.1f, keyHeight) {
             stopDeleting()
             playKeySound()
+
             try {
                 currentInputConnection?.commitText("\n", 1)
+                scheduleKeyboardBounce()
             } catch (_: Exception) {
             }
+
             clearQuickReplyArea()
         }
 
         layout.addView(bottom)
+    }
+
+    // Smooth keyboard bounce after typing
+    private fun scheduleKeyboardBounce() {
+        cancelKeyboardBounce()
+
+        val task = Runnable {
+            val keyboard = root ?: return@Runnable
+
+            keyboard.animate().cancel()
+            keyboard.translationY = 0f
+
+            keyboard.animate()
+                .translationY(-dp(4).toFloat())
+                .setDuration(120)
+                .withEndAction {
+                    keyboard.animate()
+                        .translationY(0f)
+                        .setDuration(140)
+                        .start()
+                }
+                .start()
+        }
+
+        keyboardBounceRunnable = task
+        handler.postDelayed(task, 500)
+    }
+
+    private fun cancelKeyboardBounce() {
+        keyboardBounceRunnable?.let {
+            handler.removeCallbacks(it)
+        }
+
+        keyboardBounceRunnable = null
+
+        root?.animate()?.cancel()
+        root?.translationY = 0f
     }
 
     private fun commit(value: String) {
@@ -186,7 +228,9 @@ class JoyKeyboardService : InputMethodService() {
         try {
             val connection = currentInputConnection ?: return
             connection.commitText(value, 1)
+
             scheduleQuickReplyRefresh()
+            scheduleKeyboardBounce()
         } catch (_: Exception) {
         }
     }
@@ -208,6 +252,7 @@ class JoyKeyboardService : InputMethodService() {
         quickReplyRunnable?.let {
             handler.removeCallbacks(it)
         }
+
         quickReplyRunnable = null
     }
 
@@ -287,6 +332,7 @@ class JoyKeyboardService : InputMethodService() {
 
                 setOnClickListener {
                     stopDeleting()
+
                     try {
                         currentInputConnection?.commitText(item, 1)
                         clipboardOpen = false
@@ -364,6 +410,7 @@ class JoyKeyboardService : InputMethodService() {
 
                 setOnClickListener {
                     stopDeleting()
+
                     try {
                         val connection = currentInputConnection
                             ?: return@setOnClickListener
@@ -381,6 +428,7 @@ class JoyKeyboardService : InputMethodService() {
                         }
 
                         clearQuickReplyArea()
+                        scheduleKeyboardBounce()
                     } catch (_: Exception) {
                     }
                 }
@@ -435,6 +483,7 @@ class JoyKeyboardService : InputMethodService() {
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     stopDeleting()
+
                     view.animate()
                         .translationY(-dp(5).toFloat())
                         .scaleX(0.96f)
@@ -507,6 +556,8 @@ class JoyKeyboardService : InputMethodService() {
                     MotionEvent.ACTION_DOWN -> {
                         stopDeleting()
                         backspacePressed = true
+
+                        // Selected text gets deleted first
                         deleteOneCharacter()
 
                         view.animate()
@@ -557,11 +608,23 @@ class JoyKeyboardService : InputMethodService() {
         row.addView(key, params)
     }
 
+    // Delete selected text, otherwise delete one character
     private fun deleteOneCharacter() {
         try {
+            val connection = currentInputConnection ?: return
             playKeySound()
-            currentInputConnection?.deleteSurroundingText(1, 0)
+
+            val selectedText = connection.getSelectedText(0)
+
+            if (!selectedText.isNullOrEmpty()) {
+                connection.commitText("", 1)
+            } else {
+                connection.deleteSurroundingText(1, 0)
+            }
+
             scheduleQuickReplyRefresh()
+            scheduleKeyboardBounce()
+
         } catch (_: Exception) {
         }
     }
@@ -590,12 +653,14 @@ class JoyKeyboardService : InputMethodService() {
     override fun onFinishInput() {
         stopDeleting()
         cancelQuickReplyRefresh()
+        cancelKeyboardBounce()
         super.onFinishInput()
     }
 
     override fun onDestroy() {
         stopDeleting()
         cancelQuickReplyRefresh()
+        cancelKeyboardBounce()
         handler.removeCallbacksAndMessages(null)
 
         suggestionArea = null
