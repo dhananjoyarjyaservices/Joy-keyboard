@@ -46,7 +46,7 @@ class JoyKeyboardService : InputMethodService() {
 
         try {
             toneGenerator.startTone(
-                ToneGenerator.TONE_PROP_CLICK,
+                ToneGenerator.TONE_PROP_BEEP,
                 45
             )
         } catch (_: Exception) {
