@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="quick_reply_accessibility_description">Shows your saved Joy Quick Replies when you type a slash in an editable text field. Text is processed on this device.</string>
+</resources>
