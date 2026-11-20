@@ -4,13 +4,13 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PixelFormat
-import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -45,7 +45,7 @@ class QuickReplyAccessibilityService : AccessibilityService() {
         currentText = text
 
         val query = text.substring(slash + 1)
-        val matches = store.search(query).take(5)
+        val matches = store.search(query).take(3)
         if (matches.isEmpty()) {
             hidePanel()
             return
@@ -53,66 +53,65 @@ class QuickReplyAccessibilityService : AccessibilityService() {
         showPanel(matches)
     }
 
+    // Compact one-line suggestion strip. It must not cover the keyboard keys.
     private fun showPanel(matches: List<QuickReply>) {
         hidePanel()
+
         val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(10), dp(12), dp(10))
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8), dp(4), dp(8), dp(4))
             setBackgroundColor(Color.rgb(250, 255, 251))
-            elevation = dp(12).toFloat()
+            elevation = dp(8).toFloat()
         }
 
-        val heading = TextView(this).apply {
-            text = "Joy Quick Reply"
-            textSize = 14f
-            typeface = Typeface.DEFAULT_BOLD
+        val brand = TextView(this).apply {
+            text = "Joy"
+            textSize = 13f
             setTextColor(Color.rgb(20, 110, 65))
-            setPadding(dp(8), dp(4), dp(8), dp(8))
+            setPadding(dp(5), 0, dp(8), 0)
         }
-        container.addView(heading)
+        container.addView(brand)
 
         matches.forEach { reply ->
             val item = TextView(this).apply {
-                text = "/${reply.code}   ·   ${reply.message.take(70)}"
+                text = "/${reply.code}"
                 textSize = 14f
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                gravity = Gravity.CENTER
                 setTextColor(Color.DKGRAY)
-                setPadding(dp(10), dp(12), dp(10), dp(12))
+                setPadding(dp(12), dp(8), dp(12), dp(8))
                 setBackgroundColor(Color.WHITE)
                 setOnClickListener { insertReply(reply) }
             }
-            val params = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            params.bottomMargin = dp(5)
+            val params = LinearLayout.LayoutParams(0, dp(42), 1f)
+            params.setMargins(dp(3), 0, dp(3), 0)
             container.addView(item, params)
         }
 
         val close = TextView(this).apply {
-            text = "Close"
-            textSize = 13f
-            gravity = Gravity.END
+            text = "×"
+            textSize = 22f
+            gravity = Gravity.CENTER
             setTextColor(Color.GRAY)
-            setPadding(dp(8), dp(8), dp(8), dp(4))
+            setPadding(dp(8), 0, dp(8), 0)
             setOnClickListener { hidePanel() }
         }
         container.addView(close)
 
         val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val bounds = android.graphics.Rect()
-        targetNode?.getBoundsInScreen(bounds)
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            dp(54),
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            // Anchor the reply panel immediately above the active text field,
-            // instead of pinning it to the bottom of the screen.
-            gravity = Gravity.TOP
-            y = (bounds.top - dp(205)).coerceAtLeast(dp(48))
+            // Gboard's suggestion-strip area, just above the letter keys.
+            gravity = Gravity.BOTTOM
+            y = dp(285)
         }
 
         try {
