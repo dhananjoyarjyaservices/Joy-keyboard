@@ -99,6 +99,8 @@ class QuickReplyAccessibilityService : AccessibilityService() {
         container.addView(close)
 
         val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val bounds = android.graphics.Rect()
+        targetNode?.getBoundsInScreen(bounds)
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -107,8 +109,10 @@ class QuickReplyAccessibilityService : AccessibilityService() {
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.BOTTOM
-            y = dp(8)
+            // Anchor the reply panel immediately above the active text field,
+            // instead of pinning it to the bottom of the screen.
+            gravity = Gravity.TOP
+            y = (bounds.top - dp(205)).coerceAtLeast(dp(48))
         }
 
         try {
