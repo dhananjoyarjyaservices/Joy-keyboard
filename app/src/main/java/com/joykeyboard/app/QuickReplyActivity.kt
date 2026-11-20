@@ -90,8 +90,12 @@ class QuickReplyActivity : Activity() {
             Toast.makeText(this, "Enter shortcut and message", Toast.LENGTH_SHORT).show()
             return
         }
+        val previousCode = editingCode
+        if (previousCode != null && !previousCode.equals(code, ignoreCase = true)) {
+            store.delete(previousCode)
+        }
         store.save(QuickReply(code, message))
-        Toast.makeText(this, if (editingCode == null) "Reply saved" else "Reply updated", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, if (previousCode == null) "Reply saved" else "Reply updated", Toast.LENGTH_SHORT).show()
         clearEditor()
         refreshList()
     }
