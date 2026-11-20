@@ -3,7 +3,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="Joy Keyboard"
+        android:label="Joy Quick Reply"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
 
@@ -21,6 +21,19 @@
             android:exported="false" />
 
         <service
+            android:name=".QuickReplyAccessibilityService"
+            android:label="Joy Quick Reply"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/quick_reply_accessibility" />
+        </service>
+
+        <service
             android:name=".JoyKeyboardService"
             android:label="Joy Keyboard"
             android:permission="android.permission.BIND_INPUT_METHOD"
@@ -34,5 +47,4 @@
         </service>
 
     </application>
-
 </manifest>
